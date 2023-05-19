@@ -5,14 +5,11 @@
 .DESCRIPTION
     THe script needs to be run as Administrator.
     The Set-CustomLockScreen function sets a custom lock screen image path in the Windows registry.
-    You can specify the path to your desired lock screen image. If the registry path exists, it updates the registry values for the lock screen image.
-    If the registry path does not exist, it creates the path and sets the registry values accordingly.
-
     The Reset-LockScreen function resets the lock screen image to the default Windows image.
 
 .EXAMPLE
     Set-CustomLockScreen -LockScreenImagePath "C:\Path\To\Custom\Image.jpg"
-    This example sets the lock screen picture to the specified custom image located at "C:\Path\To\Custom\Image.jpg".
+    This example sets the lock screen picture to the specified custom image located at "C:\Path\Custom\Image.jpg".
 
 .EXAMPLE
     Reset-LockScreen
