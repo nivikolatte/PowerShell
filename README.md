@@ -1,4 +1,4 @@
-# Public Scripts Repository
+# Scripts Repository
 
 Thank you for visiting my public scripts repository! A selection of my own PowerShell scripts can be found in this repository. These open-source scripts can be used to automate a variety of tasks and streamline procedures.
 
