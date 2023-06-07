@@ -16,6 +16,15 @@ Transform-GPOXMLData -folderPath "C:\GPOXMLExport" -outputPath "C:\Dump\Transfor
 
 This example runs the script to transform the GPO XML data from the "C:\GPOXMLExport" folder and saves the transformed data to the "C:\Dump\TransformedData.csv" file.
 
+.DISCLAIMER
+    This script is provided as-is without any warranty of any kind. Use it at your own risk. The author shall not be held liable for any damages or losses arising from the use of this script.
+    Please ensure that you have appropriate permissions and backup your system before running this script. It is recommended to review and understand the script code before executing it on your system.
+    Always run scripts from trusted sources and verify their content to ensure they align with your security and operational requirements.
+    By using this script, you acknowledge and agree that you are solely responsible for any consequences that may occur as a result of executing this script. If you do not agree with these terms, do not use this script.
+
+.VERSION
+    1.0
+    
 .NOTES
 - The script requires XML files in the specified folder to process.
 - The script assumes a specific XML structure for GPO data extraction.
