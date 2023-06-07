@@ -15,7 +15,7 @@
     1.0
 
 .DATE
-    Jine 07, 2023
+    June 07, 2023
 
 .AUTHOR
     Nivi Kolatte
