@@ -66,28 +66,14 @@ function New-DirectoryStructure {
         "PSADT4",
         
         # Source installer files organized by vendor
-        "Source\Adobe",
-        "Source\Microsoft", 
-        "Source\Google",
-        "Source\Mozilla",
-        "Source\Other",
+        "Source",
         
         # Generated packages
         "Packages",
         
-        # Configuration files
-        "Config",
-        
         # Logs and reports
         "Logs",
         "Reports",
-        
-        # Templates and samples
-        "Templates",
-        
-        # Testing and validation
-        "Testing\Sandbox",
-        "Testing\Results",
         
         # Documentation
         "Documentation"
@@ -119,7 +105,6 @@ function Copy-AutomationScripts {
     $scriptFiles = @(
         "Setup-PSADT4.ps1",
         "New-PSADT4Package.ps1", 
-        "Batch-PSADT4Packages.ps1",
         "Test-PSADT4Package.ps1"
     )
     
@@ -134,74 +119,6 @@ function Copy-AutomationScripts {
             Write-LogMessage "Source not found: $script" -Type "Warning"
         }
     }
-}
-
-function New-ConfigurationTemplates {
-    param([string]$BasePath)
-    
-    $configPath = Join-Path $BasePath "Config"
-    
-    Write-LogMessage "Creating configuration templates..." -Type "Info"
-    
-    # CSV Template
-    $csvTemplate = @"
-AppName,AppVersion,AppPublisher,SourcePath,InstallFile,InstallType,Architecture,Language
-Adobe Acrobat Reader,24.002.20933,Adobe,$BasePath\Source\Adobe,AdobeReader.exe,EXE,x64,EN
-Google Chrome,120.0.6099.129,Google,$BasePath\Source\Google,ChromeStandaloneSetup64.exe,EXE,x64,EN
-Mozilla Firefox,121.0,Mozilla,$BasePath\Source\Mozilla,Firefox Setup 121.0.exe,EXE,x64,EN
-Microsoft Visual C++ 2022 Redistributable,14.40.33810,Microsoft,$BasePath\Source\Microsoft,VC_redist.x64.exe,EXE,x64,EN
-7-Zip,23.01,Igor Pavlov,$BasePath\Source\Other,7z2301-x64.msi,MSI,x64,EN
-"@
-    
-    Set-Content -Path (Join-Path $configPath "AppList-Template.csv") -Value $csvTemplate -Encoding UTF8
-    
-    # JSON Template
-    $jsonTemplate = @{
-        "metadata" = @{
-            "version" = "1.0"
-            "created" = (Get-Date -Format "yyyy-MM-dd")
-            "description" = "PSADT 4.0 Application Configuration Template"
-            "basePath" = $BasePath
-        }
-        "defaults" = @{
-            "architecture" = "x64"
-            "language" = "EN"
-            "outputPath" = "$BasePath\Packages"
-            "psadt4Path" = "$BasePath\PSADT4"
-        }
-        "applications" = @(
-            @{
-                "appName" = "Adobe Acrobat Reader"
-                "appVersion" = "24.002.20933"
-                "appPublisher" = "Adobe"
-                "sourcePath" = "$BasePath\Source\Adobe"
-                "installFile" = "AdobeReader.exe"
-                "installType" = "EXE"
-                "architecture" = "x64"
-                "language" = "EN"
-                "priority" = 1
-                "enabled" = $true
-                "notes" = "Standard Adobe Reader deployment"
-            },
-            @{
-                "appName" = "Google Chrome"
-                "appVersion" = "120.0.6099.129"
-                "appPublisher" = "Google"
-                "sourcePath" = "$BasePath\Source\Google"
-                "installFile" = "ChromeStandaloneSetup64.exe"
-                "installType" = "EXE"
-                "architecture" = "x64"
-                "language" = "EN"
-                "priority" = 2
-                "enabled" = $true
-                "notes" = "Enterprise Chrome deployment"
-            }
-        )
-    } | ConvertTo-Json -Depth 4
-    
-    Set-Content -Path (Join-Path $configPath "AppList-Template.json") -Value $jsonTemplate -Encoding UTF8
-    
-    Write-LogMessage "Configuration templates created" -Type "Success"
 }
 
 function New-PowerShellProfile {
@@ -220,7 +137,6 @@ function New-PowerShellProfile {
 `$Global:PSADT4Path = '$BasePath\PSADT4'
 `$Global:PSADTSourcePath = '$BasePath\Source'
 `$Global:PSADTPackagesPath = '$BasePath\Packages'
-`$Global:PSADTConfigPath = '$BasePath\Config'
 
 # Change to scripts directory
 Set-Location `$Global:PSADTScriptsPath
@@ -233,11 +149,10 @@ function Get-PSADTPaths {
     Write-Host "PSADT 4.0: `$Global:PSADT4Path" -ForegroundColor White
     Write-Host "Source Files: `$Global:PSADTSourcePath" -ForegroundColor White
     Write-Host "Packages: `$Global:PSADTPackagesPath" -ForegroundColor White
-    Write-Host "Config: `$Global:PSADTConfigPath" -ForegroundColor White
 }
 
 function Start-PSADTSetup {
-    Write-Host "Setting up PSADT 4.0..." -ForegroundColor Green
+    Write-Host "Validating PSADT 4.0 installation..." -ForegroundColor Green
     & "`$Global:PSADTScriptsPath\Setup-PSADT4.ps1" -InstallPath `$Global:PSADT4Path
 }
 
@@ -255,13 +170,6 @@ function New-PSADTPackage {
     & "`$Global:PSADTScriptsPath\New-PSADT4Package.ps1" -AppName `$AppName -AppVersion `$AppVersion -AppPublisher `$AppPublisher -SourcePath `$sourcePath -InstallFile `$InstallFile -InstallType `$InstallType -OutputPath `$Global:PSADTPackagesPath -PSADT4Path `$Global:PSADT4Path
 }
 
-function Start-PSADTBatch {
-    param([string]`$ConfigFile)
-    
-    `$configFilePath = Join-Path `$Global:PSADTConfigPath `$ConfigFile
-    & "`$Global:PSADTScriptsPath\Batch-PSADT4Packages.ps1" -ConfigFile `$configFilePath -OutputPath `$Global:PSADTPackagesPath -PSADT4Path `$Global:PSADT4Path
-}
-
 function Test-PSADTPackage {
     param(
         [string]`$PackageName,
@@ -269,7 +177,7 @@ function Test-PSADTPackage {
     )
     
     `$packagePath = Join-Path `$Global:PSADTPackagesPath `$PackageName
-    & "`$Global:PSADTScriptsPath\Test-PSADT4Package.ps1" -PackagePath `$packagePath -ValidationLevel `$ValidationLevel -OutputReport
+    & "`$Global:PSADTScriptsPath\Test-PSADT4Package.ps1" -PackagePath `$packagePath -ValidationLevel `$ValidationLevel -OutputReport -ReportPath "`$Global:PSADTBasePath\Reports"
 }
 
 # Display welcome message
@@ -279,9 +187,8 @@ Write-Host "Profile loaded successfully!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Available commands:" -ForegroundColor Yellow
 Write-Host "  Get-PSADTPaths       - Show all configured paths" -ForegroundColor White
-Write-Host "  Start-PSADTSetup     - Download and setup PSADT 4.0" -ForegroundColor White
+Write-Host "  Start-PSADTSetup     - Validate PSADT 4.0 installation" -ForegroundColor White
 Write-Host "  New-PSADTPackage     - Create a single package" -ForegroundColor White
-Write-Host "  Start-PSADTBatch     - Process multiple packages" -ForegroundColor White
 Write-Host "  Test-PSADTPackage    - Validate a package" -ForegroundColor White
 Write-Host ""
 Write-Host "Current location: `$Global:PSADTScriptsPath" -ForegroundColor Cyan
@@ -303,57 +210,41 @@ function New-DocumentationFiles {
 
 ## Initial Setup
 
-1. **Load the PowerShell Profile**
+1. **Manually copy PSADT 4.0** to the `PSADT4` folder (download from official site)
+2. **Load the PowerShell Profile**
    ```powershell
    . .\PSADT-Profile.ps1
    ```
-
-2. **Setup PSADT 4.0**
-   ```powershell
-   Start-PSADTSetup
-   ```
-
 3. **Verify Paths**
    ```powershell
    Get-PSADTPaths
    ```
 
-## Creating Your First Package
+## Creating a Package
 
-1. **Place installer files** in the appropriate Source subfolder
-2. **Create a single package**:
+1. **Place installer files** in the `Source` folder
+2. **Create a package**:
    ```powershell
    New-PSADTPackage -AppName "Adobe Reader" -AppVersion "24.002.20933" -AppPublisher "Adobe" -InstallFile "AdobeReader.exe" -InstallType "EXE" -SourceFolder "Adobe"
    ```
-
 3. **Validate the package**:
    ```powershell
    Test-PSADTPackage -PackageName "Adobe-AdobeReader-24.002.20933"
    ```
 
-## Batch Processing
-
-1. **Edit configuration file**: `Config\AppList-Template.csv` or `Config\AppList-Template.json`
-2. **Process multiple apps**:
-   ```powershell
-   Start-PSADTBatch -ConfigFile "AppList-Template.csv"
-   ```
-
 ## Folder Structure
 
-- **Source\\**: Place installer files here, organized by vendor
-- **Packages\\**: Generated PSADT packages appear here
-- **Config\\**: Configuration files for batch processing
-- **Logs\\**: Execution logs and error reports
+- **Source\\**: Place installer files here
+- **Packages\\**: Generated PSADT packages
+- **Logs\\**: Execution logs
 - **Reports\\**: Validation reports
-- **Testing\\**: Test results and sandbox environments
+- **Documentation\\**: Guides and documentation
 
 ## Next Steps
 
-1. Copy your installer files to the Source folders
-2. Edit the configuration templates with your applications
-3. Run batch processing for multiple applications
-4. Use validation reports to ensure quality
+1. Copy your installer files to the Source folder
+2. Run New-PSADTPackage for each app
+3. Use Test-PSADTPackage to validate
 "@
     
     Set-Content -Path (Join-Path $docsPath "QuickStart.md") -Value $quickStart -Encoding UTF8
@@ -368,26 +259,13 @@ $BasePath\
 ├── Scripts\                    # Automation PowerShell scripts
 │   ├── Setup-PSADT4.ps1
 │   ├── New-PSADT4Package.ps1
-│   ├── Batch-PSADT4Packages.ps1
 │   └── Test-PSADT4Package.ps1
 ├── PSADT4\                     # PSADT 4.0 installation
 │   └── Toolkit\
 ├── Source\                     # Source installer files
-│   ├── Adobe\                  # Adobe products
-│   ├── Microsoft\              # Microsoft products
-│   ├── Google\                 # Google products
-│   ├── Mozilla\                # Mozilla products
-│   └── Other\                  # Other vendors
 ├── Packages\                   # Generated PSADT packages
-├── Config\                     # Configuration files
-│   ├── AppList-Template.csv
-│   └── AppList-Template.json
 ├── Logs\                       # Execution logs
 ├── Reports\                    # Validation reports
-├── Templates\                  # Custom templates
-├── Testing\                    # Testing and validation
-│   ├── Sandbox\
-│   └── Results\
 ├── Documentation\              # Guides and documentation
 ├── PSADT-Profile.ps1          # PowerShell profile
 └── README.md                  # Main documentation
@@ -399,19 +277,16 @@ $BasePath\
 Contains all automation PowerShell scripts for PSADT 4.0 package creation and management.
 
 ### PSADT4\
-Installation location for PowerShell App Deployment Toolkit 4.0. Automatically populated by Setup-PSADT4.ps1.
+Installation location for PowerShell App Deployment Toolkit 4.0. Must be manually copied here.
 
 ### Source\
-Organized storage for installer files. Subfolders by vendor help maintain organization:
+Organized storage for installer files:
 - Place .msi, .exe, .msp files here
-- Maintain folder structure for batch processing
+- Organize by vendor for easier management
 - Include any supporting files (transforms, patches, etc.)
 
 ### Packages\
 Output location for generated PSADT packages. Each package gets its own subfolder with complete PSADT structure.
-
-### Config\
-Configuration files for batch processing. Templates provided for CSV and JSON formats.
 
 ### Logs\
 Execution logs, error reports, and operational data from automation scripts.
@@ -419,80 +294,18 @@ Execution logs, error reports, and operational data from automation scripts.
 ### Reports\
 Validation reports, package analysis, and quality assurance documentation.
 
-### Testing\
-Sandbox environments and test results for package validation and quality assurance.
-
 ## Best Practices
 
 1. **Maintain vendor organization** in Source folders
-2. **Use descriptive names** for configuration files
+2. **Use descriptive names** for package folders
 3. **Regular cleanup** of old packages and logs
-4. **Version control** configuration files
-5. **Document custom modifications** in Templates folder
+4. **Test packages thoroughly** before deployment
+5. **Document custom modifications**
 "@
     
     Set-Content -Path (Join-Path $docsPath "FolderStructure.md") -Value $folderStructure -Encoding UTF8
     
     Write-LogMessage "Documentation files created" -Type "Success"
-}
-
-function New-SampleSourceFiles {
-    param([string]$BasePath)
-    
-    if (-not $CreateSampleData) { return }
-    
-    Write-LogMessage "Creating sample source file structure..." -Type "Info"
-    
-    $sampleData = @{
-        "Adobe" = @("AdobeReader.exe", "AdobeReader.msi", "transform.mst")
-        "Microsoft" = @("VC_redist.x64.exe", "VC_redist.x86.exe", "Office365.exe")
-        "Google" = @("ChromeStandaloneSetup64.exe", "ChromeStandaloneSetup32.exe")
-        "Mozilla" = @("Firefox Setup.exe", "Thunderbird Setup.exe")
-        "Other" = @("7z2301-x64.msi", "notepadplusplus.exe", "vlc-player.exe")
-    }
-    
-    foreach ($vendor in $sampleData.GetEnumerator()) {
-        $vendorPath = Join-Path $BasePath "Source\$($vendor.Key)"
-        
-        foreach ($file in $vendor.Value) {
-            $filePath = Join-Path $vendorPath $file
-            # Create empty placeholder files
-            "# Placeholder for $file" | Set-Content -Path $filePath -Encoding UTF8
-        }
-        
-        Write-LogMessage "Created sample files for: $($vendor.Key)" -Type "Success"
-    }
-    
-    # Create a README in Source folder
-    $sourceReadme = @"
-# Source Files Directory
-
-## Organization
-Place your installer files in the appropriate vendor subdirectories:
-
-- **Adobe\\**: Adobe products (Reader, Acrobat, Creative Suite, etc.)
-- **Microsoft\\**: Microsoft products (Office, Visual C++, .NET, etc.)
-- **Google\\**: Google products (Chrome, Earth, etc.)
-- **Mozilla\\**: Mozilla products (Firefox, Thunderbird, etc.)
-- **Other\\**: All other vendor products
-
-## File Types Supported
-- **.msi**: Windows Installer packages
-- **.exe**: Executable installers
-- **.msp**: Windows Installer patch files
-- **.mst**: Transform files (place with corresponding MSI)
-
-## Best Practices
-1. Use descriptive filenames including version numbers
-2. Keep supporting files (transforms, patches) with main installer
-3. Test installers manually before automation
-4. Document any special installation requirements
-
-## Current Sample Files
-$(if ($CreateSampleData) { "Sample placeholder files have been created for demonstration." } else { "Copy your real installer files here to begin automation." })
-"@
-    
-    Set-Content -Path (Join-Path $BasePath "Source\README.md") -Value $sourceReadme -Encoding UTF8
 }
 #endregion Helper Functions
 
@@ -512,17 +325,11 @@ try {
         Write-LogMessage "Could not determine script location. Please manually copy scripts to Scripts folder." -Type "Warning"
     }
     
-    # Create configuration templates
-    New-ConfigurationTemplates -BasePath $BasePath
-    
     # Create PowerShell profile
     New-PowerShellProfile -BasePath $BasePath
     
     # Create documentation
     New-DocumentationFiles -BasePath $BasePath
-    
-    # Create sample source files if requested
-    New-SampleSourceFiles -BasePath $BasePath
     
     # Copy main README to the root
     $mainReadmePath = Join-Path $BasePath "README.md"
@@ -536,11 +343,10 @@ try {
     
     Write-LogMessage "`nNext Steps:" -Type "Info"
     Write-LogMessage "1. Open PowerShell in: $BasePath" -Type "Info"
-    Write-LogMessage "2. Load the profile: . .\PSADT-Profile.ps1" -Type "Info"
-    Write-LogMessage "3. Run: Start-PSADTSetup" -Type "Info"
-    Write-LogMessage "4. Copy installer files to Source folders" -Type "Info"
-    Write-LogMessage "5. Edit Config templates with your applications" -Type "Info"
-    Write-LogMessage "6. Start creating packages!" -Type "Info"
+    Write-LogMessage "2. Manually copy PSADT 4.0 to: $BasePath\PSADT4" -Type "Info"
+    Write-LogMessage "3. Load the profile: . .\PSADT-Profile.ps1" -Type "Info"
+    Write-LogMessage "4. Run: New-PSADTPackage for your app" -Type "Info"
+    Write-LogMessage "5. Validate with: Test-PSADTPackage" -Type "Info"
     
     Write-LogMessage "`nDocumentation:" -Type "Info"
     Write-LogMessage "- Quick Start: $BasePath\Documentation\QuickStart.md" -Type "Info"
