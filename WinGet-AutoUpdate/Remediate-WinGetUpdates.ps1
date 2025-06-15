@@ -21,7 +21,7 @@ function Update-App {
     param([string]$AppId)
     
     Write-Log "Updating: $AppId"
-    winget upgrade --id $AppId --silent --accept-package-agreements --accept-source-agreements | Out-Null
+    & $WingetPath upgrade --id $AppId --silent --accept-package-agreements --accept-source-agreements | Out-Null
     
     # Handle common WinGet exit codes
     switch ($LASTEXITCODE) {
@@ -47,9 +47,35 @@ function Update-App {
 try {
     Write-Log "Remediation started"
     
-    # Check WinGet availability
-    if (!(Get-Command winget -EA SilentlyContinue)) {
-        Write-Log "WinGet not available" "ERROR"
+    # Find WinGet in common locations
+    $WingetPath = $null
+    $PossiblePaths = @(
+        "C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe\winget.exe",
+        "${env:ProgramFiles}\WindowsApps\Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe\winget.exe",
+        "${env:LOCALAPPDATA}\Microsoft\WindowsApps\winget.exe",
+        "C:\Windows\System32\winget.exe"
+    )
+
+    foreach ($Path in $PossiblePaths) {
+        $ExpandedPath = Resolve-Path $Path -ErrorAction SilentlyContinue
+        if ($ExpandedPath) {
+            $WingetPath = $ExpandedPath[0].Path
+            Write-Log "WinGet found at: $WingetPath"
+            break
+        }
+    }
+
+    # If still not found, try to find it using alternative method for system context
+    if (-not $WingetPath) {
+        $WinGetAppx = Get-AppxPackage -Name Microsoft.DesktopAppInstaller -AllUsers
+        if ($WinGetAppx) {
+            $WingetPath = Join-Path $WinGetAppx.InstallLocation "winget.exe"
+            Write-Log "WinGet found via AppX at: $WingetPath"
+        }
+    }
+    
+    if (-not $WingetPath -or -not (Test-Path $WingetPath)) {
+        Write-Log "WinGet not available. Path attempted: $WingetPath" "ERROR"
         Write-Output "WinGet not found"
         exit 1
     }
@@ -66,12 +92,11 @@ try {
         Write-Output "No apps to update"
         exit 0
     }
-    
-    $apps = Get-Content $AppsFile | Where-Object { $_.Trim() }
+      $apps = Get-Content $AppsFile | Where-Object { $_.Trim() }
     Write-Log "Processing $($apps.Count) apps"
     
     # Update WinGet sources
-    winget source update --accept-source-agreements | Out-Null
+    & $WingetPath source update --accept-source-agreements | Out-Null
     
     # Update each app
     $success = 0
