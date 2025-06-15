@@ -69,6 +69,13 @@ Created for automated application management in enterprise environments.
 
 ## Release History
 
+### v1.3.0 (June 15, 2025)
+
+- **Fixed Syntax Errors**: Resolved PowerShell parsing errors caused by missing line breaks
+- **Enhanced Regex Handling**: Fixed regex pattern matching for app names with special characters (e.g., Notepad++.Notepad++)
+- **Code Validation**: Scripts now pass syntax validation and execute without errors
+- **Improved Reliability**: Both detection and remediation scripts tested and verified working correctly
+
 ### v1.2.0 (June 15, 2025)
 
 - **Moved logs to ProgramData**: Logs are now stored in `C:\ProgramData\WinGet-AutoUpdate\Logs\` for better accessibility in system context
