@@ -210,7 +210,7 @@ function New-DocumentationFiles {
 
 ## Initial Setup
 
-1. **Manually copy PSADT 4.0** to the `PSADT4` folder (download from official site)
+1. **Install PSADT 4.0** using the official installer or package manager
 2. **Load the PowerShell Profile**
    ```powershell
    . .\PSADT-Profile.ps1
@@ -277,7 +277,7 @@ $BasePath\
 Contains all automation PowerShell scripts for PSADT 4.0 package creation and management.
 
 ### PSADT4\
-Installation location for PowerShell App Deployment Toolkit 4.0. Must be manually copied here.
+Installation location for PowerShell App Deployment Toolkit 4.0. Install using official installer.
 
 ### Source\
 Organized storage for installer files:
@@ -340,10 +340,9 @@ try {
     
     Write-LogMessage "`n=== SETUP COMPLETE ===" -Type "Success"
     Write-LogMessage "PSADT 4.0 Automation structure created at: $BasePath" -Type "Success"
-    
-    Write-LogMessage "`nNext Steps:" -Type "Info"
+      Write-LogMessage "`nNext Steps:" -Type "Info"
     Write-LogMessage "1. Open PowerShell in: $BasePath" -Type "Info"
-    Write-LogMessage "2. Manually copy PSADT 4.0 to: $BasePath\PSADT4" -Type "Info"
+    Write-LogMessage "2. Install PSADT 4.0 to: $BasePath\PSADT4" -Type "Info"
     Write-LogMessage "3. Load the profile: . .\PSADT-Profile.ps1" -Type "Info"
     Write-LogMessage "4. Run: New-PSADTPackage for your app" -Type "Info"
     Write-LogMessage "5. Validate with: Test-PSADTPackage" -Type "Info"

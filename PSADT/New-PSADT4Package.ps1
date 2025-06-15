@@ -1,23 +1,28 @@
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    Creates PSADT 4.0 packages with modern best practices and automation
+    Creates PSADT 4.0 packages using official New-ADTTemplate cmdlet
 
 .DESCRIPTION
-    Automates the creation of PowerShell App Deployment Toolkit 4.0 packages by:
-    - Setting up proper PSADT 4.0 directory structure
-    - Generating compliant Deploy-Application.ps1 scripts
-    - Following PSADT 4.0 documentation standards
-    - Supporting MSI, EXE, and MSP installer types
+    Automates the creation of PowerShell App Deployment Toolkit 4.0 packages using the official
+    New-ADTTemplate cmdlet approach. This ensures compatibility with the latest PSADT v4 structure
+    and best practices as documented in the official PSADT v4 documentation.
+    
+    Features:
+    - Uses New-ADTTemplate for proper v4 structure
+    - Supports v4 native and v3 compatibility templates
+    - Follows official PSADT v4 naming conventions (ADT prefixed functions)
+    - Generates modern Deploy-Application.ps1 with v4 syntax
+    - Automatic module import and session management
 
 .PARAMETER AppName
-    Name of the application (e.g., "Adobe Acrobat Reader")
+    Name of the application (e.g., "VLC Media Player")
 
 .PARAMETER AppVersion
-    Version of the application (e.g., "24.002.20933")
+    Version of the application (e.g., "3.0.20")
 
 .PARAMETER AppPublisher
-    Publisher/vendor of the application (e.g., "Adobe")
+    Publisher/vendor of the application (e.g., "VideoLAN")
 
 .PARAMETER SourcePath
     Path to the source installer files
@@ -34,6 +39,9 @@
 .PARAMETER PSADT4Path
     Path to PSADT 4.0 installation (default: C:\PSADT4)
 
+.PARAMETER UseV3Compatibility
+    Create a v3 compatibility template instead of native v4
+
 .PARAMETER Architecture
     Target architecture: x86, x64, or ARM64 (default: x64)
 
@@ -41,16 +49,17 @@
     Application language code (default: EN)
 
 .EXAMPLE
-    .\New-PSADT4Package.ps1 -AppName "Adobe Acrobat Reader" -AppVersion "24.002.20933" -AppPublisher "Adobe" -SourcePath "C:\Source\Adobe" -InstallFile "AdobeReader.exe" -InstallType "EXE"
+    .\New-PSADT4Package-Official.ps1 -AppName "VLC Media Player" -AppVersion "3.0.20" -AppPublisher "VideoLAN" -SourcePath "C:\Source\VLC" -InstallFile "vlc-3.0.20-win64.exe" -InstallType "EXE"
 
 .EXAMPLE
-    .\New-PSADT4Package.ps1 -AppName "7-Zip" -AppVersion "23.01" -AppPublisher "Igor Pavlov" -SourcePath "C:\Source\7Zip" -InstallFile "7z2301-x64.msi" -InstallType "MSI"
+    .\New-PSADT4Package-Official.ps1 -AppName "Legacy App" -AppVersion "1.0" -AppPublisher "OldCorp" -SourcePath "C:\Source\Legacy" -InstallFile "setup.exe" -InstallType "EXE" -UseV3Compatibility
 
 .NOTES
     Author: IT Department
-    Version: 2.0.0
-    Date: 2025-06-14
-    Requires: PowerShell 5.1+, PSADT 4.0
+    Version: 3.0.0
+    Date: 2025-01-15
+    Requires: PowerShell 5.1+, PSADT 4.0 with New-ADTTemplate cmdlet
+    Updated: Uses official New-ADTTemplate approach based on PSADT v4 documentation
 #>
 
 [CmdletBinding()]
@@ -78,14 +87,16 @@ param(
     [Parameter(Mandatory = $true, HelpMessage = "Installer type")]
     [ValidateSet("MSI", "EXE", "MSP")]
     [string]$InstallType,
-    
-    [Parameter(Mandatory = $false)]
+      [Parameter(Mandatory = $false)]
     [ValidateNotNullOrEmpty()]
     [string]$OutputPath = "C:\PSADT_Packages",
     
     [Parameter(Mandatory = $false)]
     [ValidateNotNullOrEmpty()]
     [string]$PSADT4Path = "C:\PSADT4",
+    
+    [Parameter(Mandatory = $false)]
+    [switch]$UseV3Compatibility,
     
     [Parameter(Mandatory = $false)]
     [ValidateSet("x86", "x64", "ARM64")]
@@ -118,27 +129,67 @@ function Write-LogMessage {
 function Test-PSADT4Installation {
     param([string]$Path)
     
+    # Check for PSADT 4.0 module files
     $requiredFiles = @(
-        "Toolkit\Deploy-Application.ps1",
-        "Toolkit\AppDeployToolkit\AppDeployToolkitMain.ps1",
-        "Toolkit\AppDeployToolkit\AppDeployToolkitExtensions.ps1"
+        "PSAppDeployToolkit.psd1",
+        "PSAppDeployToolkit.psm1"
     )
     
     foreach ($file in $requiredFiles) {
-        if (!(Test-Path (Join-Path $Path $file))) {
+        $filePath = Join-Path $Path $file
+        if (!(Test-Path $filePath)) {
+            Write-LogMessage "Missing required PSADT v4 file: $file" -Type "Error"
             return $false
         }
     }
     
-    # Check for PSADT 4.0 version
-    $mainScript = Join-Path $Path "Toolkit\AppDeployToolkit\AppDeployToolkitMain.ps1"
-    $content = Get-Content $mainScript -Raw -ErrorAction SilentlyContinue
-    
-    if ($content -match "Version.*4\." -or $content -match "PSAppDeployToolkit.*4") {
-        return $true
+    # Check for PSADT 4.0 version in module manifest
+    $manifestPath = Join-Path $Path "PSAppDeployToolkit.psd1"
+    if (Test-Path $manifestPath) {
+        try {
+            $manifest = Import-PowerShellDataFile $manifestPath -ErrorAction Stop
+            $version = [Version]$manifest.ModuleVersion
+            if ($version.Major -ge 4) {
+                Write-LogMessage "Found PSADT version: $($version.ToString())" -Type "Success"
+                return $true
+            } else {
+                Write-LogMessage "Found PSADT version $($version.ToString()), but v4.x is required" -Type "Error"
+                return $false
+            }
+        }
+        catch {
+            Write-LogMessage "Could not validate PSADT version: $($_.Exception.Message)" -Type "Error"
+            return $false
+        }
     }
     
+    Write-LogMessage "PSADT 4.0 version validation failed" -Type "Error"
     return $false
+}
+
+function Import-PSADT4Module {
+    param([string]$Path)
+    
+    $modulePath = Join-Path $Path "PSAppDeployToolkit.psm1"
+    
+    try {
+        # Import the PSADT v4 module
+        Import-Module $modulePath -Force -Global -Verbose:$false
+        Write-LogMessage "Successfully imported PSADT v4 module" -Type "Success"
+        
+        # Verify New-ADTTemplate cmdlet is available
+        if (Get-Command "New-ADTTemplate" -ErrorAction SilentlyContinue) {
+            Write-LogMessage "New-ADTTemplate cmdlet is available" -Type "Success"
+            return $true
+        } else {
+            Write-LogMessage "New-ADTTemplate cmdlet not found in module" -Type "Error"
+            return $false
+        }
+    }
+    catch {
+        Write-LogMessage "Failed to import PSADT v4 module: $($_.Exception.Message)" -Type "Error"
+        return $false
+    }
 }
 
 function New-SafePackageName {
@@ -149,83 +200,10 @@ function New-SafePackageName {
     )
     
     # Remove invalid characters and create safe package name
-    $safeName = "$Publisher-$Name-$Version" -replace '[^\w\.-]', ''
+    $safeName = "$Publisher-$Name-$Version" -replace '[^\w\.-]', '_'
     return $safeName
 }
-#endregion Helper Functions
 
-#region Main Script
-try {
-    Write-LogMessage "Starting PSADT 4.0 package creation for $AppName v$AppVersion" -Type "Info"
-    
-    # Validate PSADT 4.0 installation
-    if (!(Test-PSADT4Installation -Path $PSADT4Path)) {
-        Write-LogMessage "PSADT 4.0 installation not found or invalid at: $PSADT4Path" -Type "Error"
-        Write-LogMessage "Please ensure PSADT 4.0 is properly installed" -Type "Error"
-        exit 1
-    }
-    
-    # Validate source installer file exists
-    $sourceInstaller = Join-Path $SourcePath $InstallFile
-    if (!(Test-Path $sourceInstaller)) {
-        Write-LogMessage "Source installer not found: $sourceInstaller" -Type "Error"
-        exit 1
-    }
-    
-    # Create output directory
-    if (!(Test-Path $OutputPath)) {
-        New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
-        Write-LogMessage "Created output directory: $OutputPath" -Type "Info"
-    }
-    
-    # Create package directory with safe naming
-    $packageName = New-SafePackageName -Publisher $AppPublisher -Name $AppName -Version $AppVersion
-    $packagePath = Join-Path $OutputPath $packageName
-    
-    if (Test-Path $packagePath) {
-        Write-LogMessage "Removing existing package directory: $packagePath" -Type "Warning"
-        Remove-Item $packagePath -Recurse -Force
-    }
-    
-    Write-LogMessage "Creating package: $packageName" -Type "Info"
-    New-Item -ItemType Directory -Path $packagePath -Force | Out-Null
-    
-    # Copy PSADT 4.0 toolkit
-    $toolkitSource = Join-Path $PSADT4Path "Toolkit"
-    Write-LogMessage "Copying PSADT 4.0 toolkit files..." -Type "Info"
-    Copy-Item -Path "$toolkitSource\*" -Destination $packagePath -Recurse -Force
-    
-    # Create and populate Files directory
-    $filesPath = Join-Path $packagePath "Files"
-    New-Item -ItemType Directory -Path $filesPath -Force | Out-Null
-    
-    Write-LogMessage "Copying application files..." -Type "Info"
-    Copy-Item -Path "$SourcePath\*" -Destination $filesPath -Recurse -Force
-    
-    # Generate PSADT 4.0 compliant Deploy-Application.ps1
-    $deployScriptPath = Join-Path $packagePath "Deploy-Application.ps1"
-    $deployScript = New-PSADT4DeployScript -AppName $AppName -AppVersion $AppVersion -AppPublisher $AppPublisher -InstallFile $InstallFile -InstallType $InstallType -Architecture $Architecture -Language $Language
-    
-    Set-Content -Path $deployScriptPath -Value $deployScript -Encoding UTF8
-    
-    Write-LogMessage "Package created successfully!" -Type "Success"
-    Write-LogMessage "Package location: $packagePath" -Type "Success"
-    Write-LogMessage "Files directory: $filesPath" -Type "Info"
-    Write-LogMessage "Deploy script: $deployScriptPath" -Type "Info"
-    
-    Write-LogMessage "`nNext steps:" -Type "Info"
-    Write-LogMessage "1. Review and test Deploy-Application.ps1" -Type "Info"
-    Write-LogMessage "2. Test installation locally: Deploy-Application.ps1 -DeploymentType Install" -Type "Info"
-    Write-LogMessage "3. Create .intunewin file using IntuneWinAppUtil.exe" -Type "Info"
-    Write-LogMessage "4. Upload to Intune or SCCM" -Type "Info"
-}
-catch {
-    Write-LogMessage "Error occurred: $($_.Exception.Message)" -Type "Error"
-    exit 1
-}
-#endregion Main Script
-
-#region Deploy Script Generator
 function New-PSADT4DeployScript {
     param(
         [string]$AppName,
@@ -234,10 +212,10 @@ function New-PSADT4DeployScript {
         [string]$InstallFile,
         [string]$InstallType,
         [string]$Architecture,
-        [string]$Language
+        [string]$Language,
+        [bool]$UseV3Compatibility
     )
     
-    $processName = ($AppName -replace '\s+', '') -replace '[^\w]', ''
     $currentDate = Get-Date -Format "MM/dd/yyyy"
     
     # Generate install parameters based on type
@@ -247,39 +225,51 @@ function New-PSADT4DeployScript {
         "MSP" { "/quiet /norestart" }
     }
     
-    # Generate install command based on type
-    $installCommand = switch ($InstallType) {
-        "MSI" { 
-            "Execute-MSI -Action 'Install' -Path `$InstallFile -Parameters `$InstallParameters"
+    # Generate v4 native vs v3 compatibility commands
+    if ($UseV3Compatibility) {
+        # Use v3 compatibility function names
+        $installCommand = switch ($InstallType) {
+            "MSI" { "Execute-MSI -Action 'Install' -Path `$InstallFile -Parameters `$InstallParameters" }
+            "EXE" { "Execute-Process -Path `$InstallFile -Parameters `$InstallParameters -WindowStyle 'Hidden' -IgnoreExitCodes '3010'" }
+            "MSP" { "Execute-MSI -Action 'Patch' -Path `$InstallFile -Parameters `$InstallParameters" }
         }
-        "EXE" { 
-            "Execute-Process -Path `$InstallFile -Parameters `$InstallParameters -WindowStyle 'Hidden' -IgnoreExitCodes '3010'"
+        
+        $uninstallCommand = switch ($InstallType) {
+            "MSI" { "Execute-MSI -Action 'Uninstall' -Path `$InstallFile" }
+            "EXE" { "# Define uninstall method for EXE installer`n        Write-Log -Message 'Custom uninstall logic required for EXE installer' -Severity 2" }
+            "MSP" { "# MSP patches typically don't have standalone uninstall`n        Write-Log -Message 'MSP patch uninstall requires base application removal' -Severity 2" }
         }
-        "MSP" { 
-            "Execute-MSI -Action 'Patch' -Path `$InstallFile -Parameters `$InstallParameters"
+        
+        $welcomeCommand = "Show-InstallationWelcome -CloseProcesses '$($AppName -replace '\s+', '')' -AllowDeferCloseProcesses -DeferTimes 3 -PersistPrompt -NoMinimizeWindows"
+        $promptCommand = "Show-InstallationPrompt -Message `"`$installTitle installation completed successfully.`" -ButtonRightText 'OK' -Icon Information -NoWait"
+    } else {
+        # Use v4 native ADT prefixed functions
+        $installCommand = switch ($InstallType) {
+            "MSI" { "Start-ADTMsiProcess -Action 'Install' -FilePath `$InstallFile -Parameters `$InstallParameters" }
+            "EXE" { "Start-ADTProcess -FilePath `$InstallFile -ArgumentList `$InstallParameters -WindowStyle 'Hidden' -IgnoreExitCodes '3010'" }
+            "MSP" { "Start-ADTMsiProcess -Action 'Patch' -FilePath `$InstallFile -Parameters `$InstallParameters" }
         }
-    }
-    
-    # Generate uninstall command based on type
-    $uninstallCommand = switch ($InstallType) {
-        "MSI" { 
-            "Execute-MSI -Action 'Uninstall' -Path `$InstallFile"
+        
+        $uninstallCommand = switch ($InstallType) {
+            "MSI" { "Start-ADTMsiProcess -Action 'Uninstall' -FilePath `$InstallFile" }
+            "EXE" { "# Define uninstall method for EXE installer`n        Write-ADTLogEntry -Message 'Custom uninstall logic required for EXE installer' -Severity 2" }
+            "MSP" { "# MSP patches typically don't have standalone uninstall`n        Write-ADTLogEntry -Message 'MSP patch uninstall requires base application removal' -Severity 2" }
         }
-        "EXE" { 
-            "# Define uninstall method for EXE installer`n        Write-Log -Message 'Custom uninstall logic required for EXE installer' -Severity 2"
-        }
-        "MSP" { 
-            "# MSP patches typically don't have standalone uninstall`n        Write-Log -Message 'MSP patch uninstall requires base application removal' -Severity 2"
-        }
+        
+        $welcomeCommand = "Show-ADTInstallationWelcome -CloseProcesses '$($AppName -replace '\s+', '')' -AllowDeferCloseProcesses -DeferTimes 3 -PersistPrompt -NoMinimizeWindows"
+        $promptCommand = "Show-ADTInstallationPrompt -Message `"`$installTitle installation completed successfully.`" -ButtonRightText 'OK' -Icon Information -NoWait"
     }
 
+    $templateVersion = if ($UseV3Compatibility) { "v3 Compatibility" } else { "v4 Native" }
+    
     return @"
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    $AppName v$AppVersion Deployment Script
+    $AppName v$AppVersion Deployment Script ($templateVersion)
 .DESCRIPTION
     Deploys $AppName using PowerShell App Deployment Toolkit 4.0
+    Template: $templateVersion
     Generated on: $currentDate
 .NOTES
     Toolkit Exit Code Ranges:
@@ -342,7 +332,7 @@ Try {
 
     ## Variables: Script
     [String]`$deployAppScriptFriendlyName = 'Deploy Application'
-    [Version]`$deployAppScriptVersion = [Version]'3.10.2'
+    [Version]`$deployAppScriptVersion = [Version]'4.0.0'
     [String]`$deployAppScriptParameters = `$PSBoundParameters | ConvertTo-Json -Compress
     [String]`$deployAppScriptDate = '$currentDate'
 
@@ -355,48 +345,43 @@ Try {
     }
     [String]`$scriptDirectory = Split-Path -Path `$InvocationInfo.MyCommand.Definition -Parent
 
-    ## Dot source the required App Deploy Toolkit Functions
+    ## Import the PSAppDeployToolkit module (PSADT 4.0)
     Try {
-        [String]`$moduleAppDeployToolkitMain = "`$scriptDirectory\AppDeployToolkit\AppDeployToolkitMain.ps1"
-        If (-not (Test-Path -LiteralPath `$moduleAppDeployToolkitMain -PathType 'Leaf')) {
-            Throw "Module does not exist at the specified location [`$moduleAppDeployToolkitMain]."
+        [String]`$moduleAppDeployToolkit = "`$scriptDirectory\PSAppDeployToolkit.psm1"
+        If (-not (Test-Path -LiteralPath `$moduleAppDeployToolkit -PathType 'Leaf')) {
+            Throw "Module does not exist at the specified location [`$moduleAppDeployToolkit]."
         }
-        If (`$DisableLogging) {
-            . `$moduleAppDeployToolkitMain -DisableLogging
-        }
-        Else {
-            . `$moduleAppDeployToolkitMain
-        }
+        Import-Module `$moduleAppDeployToolkit -Force -Verbose:`$false
     }
     Catch {
         If (`$mainExitCode -eq 0) {
             [Int32]`$mainExitCode = 60008
         }
-        Write-Error -Message "Module [`$moduleAppDeployToolkitMain] failed to load: `n`$(`$_.Exception.Message)`n `$(`$_.InvocationInfo.PositionMessage)" -ErrorAction 'Continue'
+        Write-Error -Message "Module [`$moduleAppDeployToolkit] failed to load: `n`$(`$_.Exception.Message)`n `$(`$_.InvocationInfo.PositionMessage)" -ErrorAction 'Continue'
         ## Exit the script, returning the exit code to SCCM
         If (Test-Path -LiteralPath 'variable:HostInvocation') {
-            `$script:ExitCode = `$mainExitCode; Exit
+            `$script:ExitCode = `$mainExitCode
+            Exit
         }
         Else {
             Exit `$mainExitCode
         }
     }
 
-    ## Variables: Installer Files
-    [String]`$InstallFile = '$InstallFile'
-    [String]`$InstallParameters = '$installParams'
-    #endregion Initialization
+    ##*===============================================
+    ##* INITIALIZATION
+    ##*===============================================
+    [String]`$installPhase = 'Initialization'
+
+    ## <Perform Initialization tasks here>
+    
+    ## Show welcome dialog and close running processes
+    $welcomeCommand
 
     ##*===============================================
     ##* PRE-INSTALLATION
     ##*===============================================
     [String]`$installPhase = 'Pre-Installation'
-
-    ## Show Welcome Message, close applications if required, verify there is enough disk space to complete the install, and persist the prompt
-    Show-InstallationWelcome -CloseApps '$processName' -CheckDiskSpace -PersistPrompt
-
-    ## Show Progress Message (with the default message)
-    Show-InstallationProgress
 
     ## <Perform Pre-Installation tasks here>
 
@@ -406,23 +391,11 @@ Try {
     [String]`$installPhase = 'Installation'
 
     If (`$deploymentType -ine 'Uninstall' -and `$deploymentType -ine 'Repair') {
-        ## Handle Zero-Config MSI Installations
-        If (`$useDefaultMsi) {
-            [Hashtable]`$ExecuteDefaultMSISplat = @{
-                Action = 'Install'
-                Path = `$defaultMsiFile
-            }
-            If (`$defaultMstFile) {
-                `$ExecuteDefaultMSISplat.Add('Transform', `$defaultMstFile)
-            }
-            Execute-MSI @ExecuteDefaultMSISplat
-        }
-        Else {
-            ## <Perform Installation tasks here>
-            $installCommand
-        }
-
-        ## <Perform Post-Installation tasks here>
+        ## <Perform Installation tasks here>
+        [String]`$InstallFile = 'Files\$InstallFile'
+        [String]`$InstallParameters = '$installParams'
+        
+        $installCommand
     }
     ElseIf (`$deploymentType -ieq 'Uninstall') {
         ##*===============================================
@@ -430,18 +403,8 @@ Try {
         ##*===============================================
         [String]`$installPhase = 'Uninstallation'
 
-        ## Handle Zero-Config MSI Uninstallations
-        If (`$useDefaultMsi) {
-            [Hashtable]`$ExecuteDefaultMSISplat = @{
-                Action = 'Uninstall'
-                Path = `$defaultMsiFile
-            }
-            Execute-MSI @ExecuteDefaultMSISplat
-        }
-        Else {
-            ## <Perform Uninstallation tasks here>
-            $uninstallCommand
-        }
+        ## <Perform Uninstallation tasks here>
+        $uninstallCommand
     }
     ElseIf (`$deploymentType -ieq 'Repair') {
         ##*===============================================
@@ -449,18 +412,8 @@ Try {
         ##*===============================================
         [String]`$installPhase = 'Repair'
 
-        ## Handle Zero-Config MSI Repairs
-        If (`$useDefaultMsi) {
-            [Hashtable]`$ExecuteDefaultMSISplat = @{
-                Action = 'Repair'
-                Path = `$defaultMsiFile
-            }
-            Execute-MSI @ExecuteDefaultMSISplat
-        }
-        Else {
-            ## <Perform Repair tasks here>
-            Execute-MSI -Action 'Repair' -Path `$InstallFile -Parameters `$InstallParameters
-        }
+        ## <Perform Repair tasks here>
+        $installCommand
     }
 
     ##*===============================================
@@ -471,9 +424,7 @@ Try {
     ## <Perform Post-Installation tasks here>
 
     ## Display a message at the end of the install
-    If (-not `$useDefaultMsi) {
-        Show-InstallationPrompt -Message "`$installTitle installation completed successfully." -ButtonRightText 'OK' -Icon Information -NoWait
-    }
+    $promptCommand
 }
 Catch {
     [Int32]`$mainExitCode = 60001
@@ -484,4 +435,108 @@ Catch {
 }
 "@
 }
-#endregion Deploy Script Generator
+#endregion Helper Functions
+
+#region Main Script
+try {
+    Write-LogMessage "Starting PSADT 4.0 package creation using official New-ADTTemplate" -Type "Info"
+    Write-LogMessage "Application: $AppName v$AppVersion by $AppPublisher" -Type "Info"
+    Write-LogMessage "Template Mode: $(if ($UseV3Compatibility) { 'v3 Compatibility' } else { 'v4 Native' })" -Type "Info"
+    
+    # Validate PSADT 4.0 installation
+    if (!(Test-PSADT4Installation -Path $PSADT4Path)) {
+        Write-LogMessage "PSADT 4.0 installation not found or invalid at: $PSADT4Path" -Type "Error"
+        Write-LogMessage "Please ensure PSADT 4.0 is properly installed" -Type "Error"
+        exit 1
+    }
+    
+    # Import PSADT 4.0 module to get New-ADTTemplate cmdlet
+    if (!(Import-PSADT4Module -Path $PSADT4Path)) {
+        Write-LogMessage "Failed to import PSADT 4.0 module or New-ADTTemplate cmdlet not available" -Type "Error"
+        exit 1
+    }
+    
+    # Validate source installer file exists
+    $sourceInstaller = Join-Path $SourcePath $InstallFile
+    if (!(Test-Path $sourceInstaller)) {
+        Write-LogMessage "Source installer not found: $sourceInstaller" -Type "Error"
+        exit 1
+    }
+      # Create output directory
+    if (!(Test-Path $OutputPath)) {
+        New-Item -ItemType Directory -Path $OutputPath -Force | Out-Null
+        Write-LogMessage "Created output directory: $OutputPath" -Type "Info"
+    }
+    
+    # Create package directory with safe naming
+    $packageName = New-SafePackageName -Publisher $AppPublisher -Name $AppName -Version $AppVersion
+    
+    # Use New-ADTTemplate to create the official v4 structure
+    Write-LogMessage "Creating PSADT template using New-ADTTemplate..." -Type "Info"
+    
+    try {        if ($UseV3Compatibility) {
+            # Create v3 compatibility template
+            New-ADTTemplate -Destination $OutputPath -Name $packageName -Version 3
+            Write-LogMessage "Created v3 compatibility template: $packageName" -Type "Success"
+        } else {
+            # Create v4 native template
+            New-ADTTemplate -Destination $OutputPath -Name $packageName
+            Write-LogMessage "Created v4 native template: $packageName" -Type "Success"
+        }
+    }
+    catch {
+        Write-LogMessage "Failed to create template using New-ADTTemplate: $($_.Exception.Message)" -Type "Error"
+        exit 1
+    }
+    
+    $packagePath = Join-Path $OutputPath $packageName
+    
+    if (!(Test-Path $packagePath)) {
+        Write-LogMessage "Template was not created at expected location: $packagePath" -Type "Error"
+        exit 1
+    }
+    
+    # Create and populate Files directory
+    $filesPath = Join-Path $packagePath "Files"
+    if (!(Test-Path $filesPath)) {
+        New-Item -ItemType Directory -Path $filesPath -Force | Out-Null
+    }
+    
+    Write-LogMessage "Copying application files..." -Type "Info"
+    Copy-Item -Path "$SourcePath\*" -Destination $filesPath -Recurse -Force
+    
+    # Generate enhanced Deploy-Application.ps1 for v4
+    $deployScriptPath = Join-Path $packagePath "Deploy-Application.ps1"
+    $deployScript = New-PSADT4DeployScript -AppName $AppName -AppVersion $AppVersion -AppPublisher $AppPublisher -InstallFile $InstallFile -InstallType $InstallType -Architecture $Architecture -Language $Language -UseV3Compatibility $UseV3Compatibility
+    
+    Set-Content -Path $deployScriptPath -Value $deployScript -Encoding UTF8
+    
+    Write-LogMessage "Package created successfully using official PSADT v4 methods!" -Type "Success"
+    Write-LogMessage "Package location: $packagePath" -Type "Success"
+    Write-LogMessage "Files directory: $filesPath" -Type "Info"
+    Write-LogMessage "Deploy script: $deployScriptPath" -Type "Info"
+    Write-LogMessage "Template type: $(if ($UseV3Compatibility) { 'v3 Compatibility' } else { 'v4 Native' })" -Type "Info"
+    
+    Write-LogMessage "`nNext steps:" -Type "Info"
+    Write-LogMessage "1. Review and test Deploy-Application.ps1" -Type "Info"
+    Write-LogMessage "2. Test installation locally: Deploy-Application.ps1 -DeploymentType Install" -Type "Info"
+    Write-LogMessage "3. Create .intunewin file using IntuneWinAppUtil.exe" -Type "Info"
+    Write-LogMessage "4. Upload to Intune or SCCM" -Type "Info"
+    
+    # Display recommended usage examples based on template type
+    if ($UseV3Compatibility) {
+        Write-LogMessage "`nv3 Compatibility Template Features:" -Type "Info"
+        Write-LogMessage "- Uses familiar v3 function names (Execute-MSI, Show-InstallationWelcome)" -Type "Info"
+        Write-LogMessage "- Easier migration from existing v3 scripts" -Type "Info"
+    } else {
+        Write-LogMessage "`nv4 Native Template Features:" -Type "Info"
+        Write-LogMessage "- Uses new v4 ADT-prefixed functions (Start-ADTMsiProcess, Show-ADTInstallationWelcome)" -Type "Info"
+        Write-LogMessage "- Access to latest v4 features and improvements" -Type "Info"
+        Write-LogMessage "- Better performance and reliability" -Type "Info"
+    }
+}
+catch {
+    Write-LogMessage "Error occurred: $($_.Exception.Message)" -Type "Error"
+    exit 1
+}
+#endregion Main Script

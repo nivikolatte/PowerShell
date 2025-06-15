@@ -66,26 +66,31 @@ function Write-LogMessage {
 function Test-PSADT4Installation {
     param([string]$Path)
     
+    # PSADT 4.0 has a different structure - check for the new files
     $requiredFiles = @(
         "Toolkit\Deploy-Application.ps1",
-        "Toolkit\AppDeployToolkit\AppDeployToolkitMain.ps1",
-        "Toolkit\AppDeployToolkit\AppDeployToolkitExtensions.ps1"
+        "Toolkit\PSAppDeployToolkit.psd1",
+        "Toolkit\PSAppDeployToolkit.psm1"
     )
     
     foreach ($file in $requiredFiles) {
         if (!(Test-Path (Join-Path $Path $file))) {
+            Write-LogMessage "Missing required file: $file" -Type "Error"
             return $false
         }
     }
     
-    # Check for PSADT 4.0 version
-    $mainScript = Join-Path $Path "Toolkit\AppDeployToolkit\AppDeployToolkitMain.ps1"
-    $content = Get-Content $mainScript -Raw -ErrorAction SilentlyContinue
-    
-    if ($content -match "Version.*4\." -or $content -match "PSAppDeployToolkit.*4") {
-        return $true
+    # Check for PSADT 4.0 version in module manifest
+    $manifestPath = Join-Path $Path "Toolkit\PSAppDeployToolkit.psd1"
+    if (Test-Path $manifestPath) {
+        $manifest = Import-PowerShellDataFile $manifestPath -ErrorAction SilentlyContinue
+        if ($manifest.ModuleVersion -and $manifest.ModuleVersion.ToString().StartsWith("4.")) {
+            Write-LogMessage "Found PSADT version: $($manifest.ModuleVersion)" -Type "Success"
+            return $true
+        }
     }
     
+    Write-LogMessage "PSADT 4.0 version validation failed" -Type "Error"
     return $false
 }
 #endregion Helper Functions
@@ -113,9 +118,9 @@ try {
      $InstallPath\
      └── Toolkit\
          ├── Deploy-Application.ps1
-         └── AppDeployToolkit\
-             ├── AppDeployToolkitMain.ps1
-             └── AppDeployToolkitExtensions.ps1
+         ├── PSAppDeployToolkit.psd1
+         ├── PSAppDeployToolkit.psm1
+         └── en\
      ```
 
 3. **Validate Installation**
