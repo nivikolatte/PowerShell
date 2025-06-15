@@ -1,3 +1,5 @@
+#Requires -Version 3.0
+
 <#
 .SYNOPSIS
     WinGet Update Detection Script for Microsoft Intune Remediation
@@ -99,7 +101,9 @@ function Write-Log {
             Set-Content $LogFile "$(Get-Date -f 'HH:mm:ss') [INFO] Log reset" -Force
         }
         Add-Content $LogFile $Entry -Force
-    } catch {}
+    } catch {
+        # Silently handle log write errors to prevent script failure
+    }
     if ($Level -eq "ERROR") { Write-Error $Entry }
 }
 
@@ -153,12 +157,11 @@ try {
     Write-Log "Getting list of all installed apps"
     try {
         $allAppsOutput = & $WingetPath list --accept-source-agreements 2>&1
-        # Save complete inventory to ProgramData for system-wide access
-        $allAppsOutput | Out-File $AllAppsLogFile -Force
+        # Save complete inventory to ProgramData for system-wide access        $allAppsOutput | Out-File $AllAppsLogFile -Force
         Write-Log "Successfully retrieved list of all installed apps"
-    }
-    catch {
-        Write-Log "Error retrieving all apps: $_" "ERROR"
+    }    catch {
+        $ErrorMessage = $_.Exception.Message
+        Write-Log "Error retrieving all apps: $ErrorMessage" "ERROR"
     }
 
     # CONTEXT VALIDATION SECTION
@@ -230,7 +233,8 @@ try {
     }
     
 } catch {
-    Write-Log "Error: $($_.Exception.Message)" "ERROR"
+    $ErrorMessage = $_.Exception.Message
+    Write-Log "Error: $ErrorMessage" "ERROR"
     Write-Output "Detection error"
     exit 0
 }

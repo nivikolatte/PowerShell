@@ -1,3 +1,5 @@
+#Requires -Version 3.0
+
 <#
 .SYNOPSIS
     WinGet Update Remediation Script for Microsoft Intune
@@ -96,7 +98,9 @@ function Write-Log {
             Set-Content $LogFile "$(Get-Date -f 'HH:mm:ss') [INFO] Log reset" -Force
         }
         Add-Content $LogFile $Entry -Force
-    } catch {}
+    } catch {
+        # Silently handle log write errors to prevent script failure
+    }
     if ($Level -eq "ERROR") { Write-Error $Entry }
 }
 
@@ -255,7 +259,8 @@ try {
     }
     
 } catch {
-    Write-Log "Error: $($_.Exception.Message)" "ERROR"
+    $ErrorMessage = $_.Exception.Message
+    Write-Log "Error: $ErrorMessage" "ERROR"
     Write-Output "Remediation error"
     exit 1
 }
