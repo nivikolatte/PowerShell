@@ -61,3 +61,18 @@ $Apps = @(
 ## Author
 
 Created for automated application management in enterprise environments.
+
+## Release History
+
+### v1.1.0 (June 15, 2025)
+
+- **Enhanced WinGet Path Detection**: Added robust path discovery for system context execution
+- **Multiple Search Methods**: Now checks multiple locations and falls back to AppX package information
+- **Full Path Execution**: Uses absolute paths to ensure WinGet runs properly in Intune's system context
+- **Improved Logging**: Better diagnostic information about WinGet location and execution status
+
+### v1.0.0 (Initial Release)
+
+- Basic WinGet update detection and remediation for Intune
+- Support for Chrome, Firefox, Git, Notepad++, and 7zip
+- Exit code handling and space-efficient logging
