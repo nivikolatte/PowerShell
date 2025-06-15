@@ -1,8 +1,14 @@
 # WinGet Update Remediation Script for Intune
 # Updates apps from the list created by detection script
 
-$LogFile = "$env:TEMP\WinGet-Remediation.log"
-$AppsFile = "$env:TEMP\winget-apps.txt"
+# Create log directory in ProgramData for better accessibility in system context
+$LogDir = "$env:ProgramData\WinGet-AutoUpdate\Logs"
+if (-not (Test-Path $LogDir)) {
+    New-Item -Path $LogDir -ItemType Directory -Force | Out-Null
+}
+
+$LogFile = "$LogDir\WinGet-Remediation.log"
+$AppsFile = "$LogDir\winget-apps.txt"
 
 function Write-Log {
     param([string]$Msg, [string]$Level = "INFO")
@@ -46,6 +52,8 @@ function Update-App {
 
 try {
     Write-Log "Remediation started"
+    Write-Log "Running as user: $env:USERNAME"
+    Write-Log "Computer name: $env:COMPUTERNAME"
     
     # Find WinGet in common locations
     $WingetPath = $null
@@ -91,18 +99,37 @@ try {
         Write-Log "Apps list not found" "ERROR"
         Write-Output "No apps to update"
         exit 0
+    }    $apps = Get-Content $AppsFile | Where-Object { $_.Trim() }
+    Write-Log "Processing $($apps.Count) apps from list"
+    
+    # First check which apps exist in this context
+    $existingApps = @()
+    foreach ($app in $apps) {
+        $appCheck = & $WingetPath list --id $app --accept-source-agreements 2>&1
+        if ($appCheck -match $app) {
+            $existingApps += $app
+            Write-Log "App found in current context: $app"
+        }
+        else {
+            Write-Log "App NOT found in current context: $app" "WARNING"
+        }
     }
-      $apps = Get-Content $AppsFile | Where-Object { $_.Trim() }
-    Write-Log "Processing $($apps.Count) apps"
+    
+    Write-Log "Found $($existingApps.Count) of $($apps.Count) apps in current context"
+    
+    if ($existingApps.Count -eq 0) {
+        Write-Log "No monitored apps found in system context" "WARNING"
+        Write-Output "No apps found to update in system context"
+        exit 0
+    }
     
     # Update WinGet sources
     & $WingetPath source update --accept-source-agreements | Out-Null
-    
-    # Update each app
+      # Update each app
     $success = 0
     $failed = 0
     
-    foreach ($app in $apps) {
+    foreach ($app in $existingApps) {  # Only update apps that exist in this context
         if (Update-App $app) {
             $success++
         } else {
