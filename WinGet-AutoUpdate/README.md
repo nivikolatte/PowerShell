@@ -35,8 +35,13 @@ The scripts currently monitor and update the following applications:
 
 ## Log Files
 
-- Detection log: `%TEMP%\WinGet-Detection.log`
-- Remediation log: `%TEMP%\WinGet-Remediation.log`
+- **Location**: `C:\ProgramData\WinGet-AutoUpdate\Logs\`
+- Detection log: `WinGet-Detection.log`
+- Remediation log: `WinGet-Remediation.log`
+- All apps list: `WinGet-AllApps.log`
+- Upgrade check output: `WinGet-Upgrade.log`
+
+These logs are stored in ProgramData for better accessibility when running in system context.
 
 ## Customization
 
@@ -63,6 +68,12 @@ $Apps = @(
 Created for automated application management in enterprise environments.
 
 ## Release History
+
+### v1.2.0 (June 15, 2025)
+
+- **Moved logs to ProgramData**: Logs are now stored in `C:\ProgramData\WinGet-AutoUpdate\Logs\` for better accessibility in system context
+- **Enhanced diagnostics**: Added more detailed logging and separate log files for upgrade output and app lists
+- **Username and computer name logging**: Added for better troubleshooting in different contexts
 
 ### v1.1.0 (June 15, 2025)
 
