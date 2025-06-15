@@ -7,10 +7,9 @@
     Automates the creation of PowerShell App Deployment Toolkit 4.0 packages using the official
     New-ADTTemplate cmdlet approach. This ensures compatibility with the latest PSADT v4 structure
     and best practices as documented in the official PSADT v4 documentation.
-    
-    Features:
+      Features:
     - Uses New-ADTTemplate for proper v4 structure
-    - Supports v4 native and v3 compatibility templates
+    - Pure PSADT v4 implementation only
     - Follows official PSADT v4 naming conventions (ADT prefixed functions)
     - Generates modern Deploy-Application.ps1 with v4 syntax
     - Automatic module import and session management
@@ -39,8 +38,11 @@
 .PARAMETER PSADT4Path
     Path to PSADT 4.0 installation (default: C:\PSADT4)
 
-.PARAMETER UseV3Compatibility
-    Create a v3 compatibility template instead of native v4
+.PARAMETER CompanyName
+    Company name for registry keys (defaults to AppPublisher if not specified)
+
+.PARAMETER LogPath
+    Custom log path for PSADT logs (default: C:\Windows\Logs\Software)
 
 .PARAMETER Architecture
     Target architecture: x86, x64, or ARM64 (default: x64)
@@ -49,17 +51,17 @@
     Application language code (default: EN)
 
 .EXAMPLE
-    .\New-PSADT4Package-Official.ps1 -AppName "VLC Media Player" -AppVersion "3.0.20" -AppPublisher "VideoLAN" -SourcePath "C:\Source\VLC" -InstallFile "vlc-3.0.20-win64.exe" -InstallType "EXE"
+    .\New-PSADT4Package.ps1 -AppName "VLC Media Player" -AppVersion "3.0.20" -AppPublisher "VideoLAN" -SourcePath "C:\Source\VLC" -InstallFile "vlc-3.0.20-win64.exe" -InstallType "EXE"
 
 .EXAMPLE
-    .\New-PSADT4Package-Official.ps1 -AppName "Legacy App" -AppVersion "1.0" -AppPublisher "OldCorp" -SourcePath "C:\Source\Legacy" -InstallFile "setup.exe" -InstallType "EXE" -UseV3Compatibility
+    .\New-PSADT4Package.ps1 -AppName "Chrome" -AppVersion "120.0" -AppPublisher "Google" -CompanyName "MyCompany" -SourcePath "C:\Source" -InstallFile "chrome.msi" -InstallType "MSI" -LogPath "D:\Logs"
 
 .NOTES
     Author: IT Department
-    Version: 3.0.0
-    Date: 2025-01-15
+    Version: 4.0.0
+    Date: 2025-06-16
     Requires: PowerShell 5.1+, PSADT 4.0 with New-ADTTemplate cmdlet
-    Updated: Uses official New-ADTTemplate approach based on PSADT v4 documentation
+    Updated: Pure PSADT v4 implementation - NO v3 compatibility
 #>
 
 [CmdletBinding()]
@@ -83,11 +85,11 @@ param(
     [Parameter(Mandatory = $true, HelpMessage = "Main installer filename")]
     [ValidateNotNullOrEmpty()]
     [string]$InstallFile,
-    
-    [Parameter(Mandatory = $true, HelpMessage = "Installer type")]
+      [Parameter(Mandatory = $true, HelpMessage = "Installer type")]
     [ValidateSet("MSI", "EXE", "MSP")]
     [string]$InstallType,
-      [Parameter(Mandatory = $false)]
+    
+    [Parameter(Mandatory = $false)]
     [ValidateNotNullOrEmpty()]
     [string]$OutputPath = "C:\PSADT_Packages",
     
@@ -95,8 +97,12 @@ param(
     [ValidateNotNullOrEmpty()]
     [string]$PSADT4Path = "C:\PSADT4",
     
-    [Parameter(Mandatory = $false)]
-    [switch]$UseV3Compatibility,
+    [Parameter(Mandatory = $false, HelpMessage = "Company name for registry keys (defaults to AppPublisher)")]
+    [ValidateNotNullOrEmpty()]
+    [string]$CompanyName,
+      [Parameter(Mandatory = $false, HelpMessage = "Custom log path for PSADT logs")]
+    [ValidateNotNullOrEmpty()]
+    [string]$LogPath = "C:\Windows\Logs\Software",
     
     [Parameter(Mandatory = $false)]
     [ValidateSet("x86", "x64", "ARM64")]
@@ -213,10 +219,10 @@ function New-PSADT4DeployScript {
         [string]$InstallType,
         [string]$Architecture,
         [string]$Language,
-        [bool]$UseV3Compatibility
+        [string]$CompanyName,
+        [string]$LogPath
     )
-    
-    $currentDate = Get-Date -Format "MM/dd/yyyy"
+      $currentDate = Get-Date -Format "MM/dd/yyyy"
     
     # Generate install parameters based on type
     $installParams = switch ($InstallType) {
@@ -225,51 +231,29 @@ function New-PSADT4DeployScript {
         "MSP" { "/quiet /norestart" }
     }
     
-    # Generate v4 native vs v3 compatibility commands
-    if ($UseV3Compatibility) {
-        # Use v3 compatibility function names
-        $installCommand = switch ($InstallType) {
-            "MSI" { "Execute-MSI -Action 'Install' -Path `$InstallFile -Parameters `$InstallParameters" }
-            "EXE" { "Execute-Process -Path `$InstallFile -Parameters `$InstallParameters -WindowStyle 'Hidden' -IgnoreExitCodes '3010'" }
-            "MSP" { "Execute-MSI -Action 'Patch' -Path `$InstallFile -Parameters `$InstallParameters" }
-        }
-        
-        $uninstallCommand = switch ($InstallType) {
-            "MSI" { "Execute-MSI -Action 'Uninstall' -Path `$InstallFile" }
-            "EXE" { "# Define uninstall method for EXE installer`n        Write-Log -Message 'Custom uninstall logic required for EXE installer' -Severity 2" }
-            "MSP" { "# MSP patches typically don't have standalone uninstall`n        Write-Log -Message 'MSP patch uninstall requires base application removal' -Severity 2" }
-        }
-        
-        $welcomeCommand = "Show-InstallationWelcome -CloseProcesses '$($AppName -replace '\s+', '')' -AllowDeferCloseProcesses -DeferTimes 3 -PersistPrompt -NoMinimizeWindows"
-        $promptCommand = "Show-InstallationPrompt -Message `"`$installTitle installation completed successfully.`" -ButtonRightText 'OK' -Icon Information -NoWait"
-    } else {
-        # Use v4 native ADT prefixed functions
-        $installCommand = switch ($InstallType) {
-            "MSI" { "Start-ADTMsiProcess -Action 'Install' -FilePath `$InstallFile -Parameters `$InstallParameters" }
-            "EXE" { "Start-ADTProcess -FilePath `$InstallFile -ArgumentList `$InstallParameters -WindowStyle 'Hidden' -IgnoreExitCodes '3010'" }
-            "MSP" { "Start-ADTMsiProcess -Action 'Patch' -FilePath `$InstallFile -Parameters `$InstallParameters" }
-        }
-        
-        $uninstallCommand = switch ($InstallType) {
-            "MSI" { "Start-ADTMsiProcess -Action 'Uninstall' -FilePath `$InstallFile" }
-            "EXE" { "# Define uninstall method for EXE installer`n        Write-ADTLogEntry -Message 'Custom uninstall logic required for EXE installer' -Severity 2" }
-            "MSP" { "# MSP patches typically don't have standalone uninstall`n        Write-ADTLogEntry -Message 'MSP patch uninstall requires base application removal' -Severity 2" }
-        }
-        
-        $welcomeCommand = "Show-ADTInstallationWelcome -CloseProcesses '$($AppName -replace '\s+', '')' -AllowDeferCloseProcesses -DeferTimes 3 -PersistPrompt -NoMinimizeWindows"
-        $promptCommand = "Show-ADTInstallationPrompt -Message `"`$installTitle installation completed successfully.`" -ButtonRightText 'OK' -Icon Information -NoWait"
+    # Use v4 native ADT prefixed functions only
+    $installCommand = switch ($InstallType) {
+        "MSI" { "Start-ADTMsiProcess -Action 'Install' -FilePath `$InstallFile -Parameters `$InstallParameters" }
+        "EXE" { "Start-ADTProcess -FilePath `$InstallFile -ArgumentList `$InstallParameters -WindowStyle 'Hidden' -IgnoreExitCodes '3010'" }
+        "MSP" { "Start-ADTMsiProcess -Action 'Patch' -FilePath `$InstallFile -Parameters `$InstallParameters" }
     }
-
-    $templateVersion = if ($UseV3Compatibility) { "v3 Compatibility" } else { "v4 Native" }
     
+    $uninstallCommand = switch ($InstallType) {
+        "MSI" { "Start-ADTMsiProcess -Action 'Uninstall' -FilePath `$InstallFile" }
+        "EXE" { "# Define uninstall method for EXE installer`n        Write-ADTLogEntry -Message 'Custom uninstall logic required for EXE installer' -Severity 2" }
+        "MSP" { "# MSP patches typically don't have standalone uninstall`n        Write-ADTLogEntry -Message 'MSP patch uninstall requires base application removal' -Severity 2" }
+    }
+      $welcomeCommand = "Show-ADTInstallationWelcome -CloseProcesses '$($AppName -replace '\s+', '')' -AllowDeferCloseProcesses -DeferTimes 3 -PersistPrompt -NoMinimizeWindows"
+    $promptCommand = "Show-ADTInstallationPrompt -Message `"`$installTitle installation completed successfully.`" -ButtonRightText 'OK' -Icon Information -NoWait"
+
     return @"
 #Requires -Version 5.1
 <#
 .SYNOPSIS
-    $AppName v$AppVersion Deployment Script ($templateVersion)
+    $AppName v$AppVersion Deployment Script (PSADT v4 Native)
 .DESCRIPTION
     Deploys $AppName using PowerShell App Deployment Toolkit 4.0
-    Template: $templateVersion
+    Template: PSADT v4 Native
     Generated on: $currentDate
 .NOTES
     Toolkit Exit Code Ranges:
@@ -388,20 +372,24 @@ Try {
     ##*===============================================
     ##* INSTALLATION
     ##*===============================================
-    [String]`$installPhase = 'Installation'
-
-    If (`$deploymentType -ine 'Uninstall' -and `$deploymentType -ine 'Repair') {
+    [String]`$installPhase = 'Installation'    If (`$deploymentType -ine 'Uninstall' -and `$deploymentType -ine 'Repair') {
         ## <Perform Installation tasks here>
         [String]`$InstallFile = 'Files\$InstallFile'
         [String]`$InstallParameters = '$installParams'
+          $installCommand
         
-        $installCommand
+        ## Create registry keys for Intune detection
+        Set-ADTRegistryKey -Key 'HKEY_LOCAL_MACHINE\SOFTWARE\$CompanyName\$AppName' -Name 'Version' -Value '$AppVersion' -Type 'String'
+        Set-ADTRegistryKey -Key 'HKEY_LOCAL_MACHINE\SOFTWARE\$CompanyName\$AppName' -Name 'InstallDate' -Value (Get-Date -Format 'yyyy-MM-dd') -Type 'String'
     }
     ElseIf (`$deploymentType -ieq 'Uninstall') {
         ##*===============================================
         ##* UNINSTALLATION
         ##*===============================================
         [String]`$installPhase = 'Uninstallation'
+
+        ## Remove registry keys for Intune detection
+        Remove-ADTRegistryKey -Key 'HKEY_LOCAL_MACHINE\SOFTWARE\$CompanyName\$AppName' -Recurse
 
         ## <Perform Uninstallation tasks here>
         $uninstallCommand
@@ -441,7 +429,16 @@ Catch {
 try {
     Write-LogMessage "Starting PSADT 4.0 package creation using official New-ADTTemplate" -Type "Info"
     Write-LogMessage "Application: $AppName v$AppVersion by $AppPublisher" -Type "Info"
-    Write-LogMessage "Template Mode: $(if ($UseV3Compatibility) { 'v3 Compatibility' } else { 'v4 Native' })" -Type "Info"
+    Write-LogMessage "Template Mode: PSADT v4 Native Only" -Type "Info"
+    
+    # Set default CompanyName if not provided
+    if ([string]::IsNullOrEmpty($CompanyName)) {
+        $CompanyName = $AppPublisher
+        Write-LogMessage "CompanyName not specified, using AppPublisher: $CompanyName" -Type "Info"
+    }
+    
+    Write-LogMessage "Registry key will be created at: HKEY_LOCAL_MACHINE\SOFTWARE\$CompanyName\$AppName" -Type "Info"
+    Write-LogMessage "Log path configured: $LogPath" -Type "Info"
     
     # Validate PSADT 4.0 installation
     if (!(Test-PSADT4Installation -Path $PSADT4Path)) {
@@ -473,16 +470,10 @@ try {
     
     # Use New-ADTTemplate to create the official v4 structure
     Write-LogMessage "Creating PSADT template using New-ADTTemplate..." -Type "Info"
-    
-    try {        if ($UseV3Compatibility) {
-            # Create v3 compatibility template
-            New-ADTTemplate -Destination $OutputPath -Name $packageName -Version 3
-            Write-LogMessage "Created v3 compatibility template: $packageName" -Type "Success"
-        } else {
-            # Create v4 native template
-            New-ADTTemplate -Destination $OutputPath -Name $packageName
-            Write-LogMessage "Created v4 native template: $packageName" -Type "Success"
-        }
+      try {
+        # Create v4 native template only
+        New-ADTTemplate -Destination $OutputPath -Name $packageName
+        Write-LogMessage "Created PSADT v4 native template: $packageName" -Type "Success"
     }
     catch {
         Write-LogMessage "Failed to create template using New-ADTTemplate: $($_.Exception.Message)" -Type "Error"
@@ -507,15 +498,14 @@ try {
     
     # Generate enhanced Deploy-Application.ps1 for v4
     $deployScriptPath = Join-Path $packagePath "Deploy-Application.ps1"
-    $deployScript = New-PSADT4DeployScript -AppName $AppName -AppVersion $AppVersion -AppPublisher $AppPublisher -InstallFile $InstallFile -InstallType $InstallType -Architecture $Architecture -Language $Language -UseV3Compatibility $UseV3Compatibility
+    $deployScript = New-PSADT4DeployScript -AppName $AppName -AppVersion $AppVersion -AppPublisher $AppPublisher -InstallFile $InstallFile -InstallType $InstallType -Architecture $Architecture -Language $Language -CompanyName $CompanyName -LogPath $LogPath
     
     Set-Content -Path $deployScriptPath -Value $deployScript -Encoding UTF8
-    
-    Write-LogMessage "Package created successfully using official PSADT v4 methods!" -Type "Success"
+      Write-LogMessage "Package created successfully using official PSADT v4 methods!" -Type "Success"
     Write-LogMessage "Package location: $packagePath" -Type "Success"
     Write-LogMessage "Files directory: $filesPath" -Type "Info"
     Write-LogMessage "Deploy script: $deployScriptPath" -Type "Info"
-    Write-LogMessage "Template type: $(if ($UseV3Compatibility) { 'v3 Compatibility' } else { 'v4 Native' })" -Type "Info"
+    Write-LogMessage "Template type: v4 Native Only" -Type "Info"
     
     Write-LogMessage "`nNext steps:" -Type "Info"
     Write-LogMessage "1. Review and test Deploy-Application.ps1" -Type "Info"
@@ -523,17 +513,11 @@ try {
     Write-LogMessage "3. Create .intunewin file using IntuneWinAppUtil.exe" -Type "Info"
     Write-LogMessage "4. Upload to Intune or SCCM" -Type "Info"
     
-    # Display recommended usage examples based on template type
-    if ($UseV3Compatibility) {
-        Write-LogMessage "`nv3 Compatibility Template Features:" -Type "Info"
-        Write-LogMessage "- Uses familiar v3 function names (Execute-MSI, Show-InstallationWelcome)" -Type "Info"
-        Write-LogMessage "- Easier migration from existing v3 scripts" -Type "Info"
-    } else {
-        Write-LogMessage "`nv4 Native Template Features:" -Type "Info"
-        Write-LogMessage "- Uses new v4 ADT-prefixed functions (Start-ADTMsiProcess, Show-ADTInstallationWelcome)" -Type "Info"
-        Write-LogMessage "- Access to latest v4 features and improvements" -Type "Info"
-        Write-LogMessage "- Better performance and reliability" -Type "Info"
-    }
+    Write-LogMessage "`nPSADT v4 Native Features:" -Type "Info"
+    Write-LogMessage "- Uses v4 ADT-prefixed functions (Start-ADTMsiProcess, Show-ADTInstallationWelcome)" -Type "Info"
+    Write-LogMessage "- Access to latest v4 features and improvements" -Type "Info"
+    Write-LogMessage "- Better performance and reliability" -Type "Info"
+    Write-LogMessage "- Intune-ready registry keys and logging support" -Type "Info"
 }
 catch {
     Write-LogMessage "Error occurred: $($_.Exception.Message)" -Type "Error"

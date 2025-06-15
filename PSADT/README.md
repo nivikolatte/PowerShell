@@ -5,9 +5,11 @@ A comprehensive automation solution for creating, validating, and managing Power
 ## 🚀 Features
 
 - **Official v4 Template Support**: Uses `New-ADTTemplate` cmdlet from PSADT v4
-- **v4 Native & v3 Compatibility**: Support for both ADT-prefixed functions and legacy compatibility
+- **PSADT v4 Native Only**: Pure v4 implementation with ADT-prefixed functions
 - **PSADT 4.0 Compliant**: Updated based on official PSADT v4 documentation
 - **Automated Package Creation**: Generate complete PSADT packages from minimal input
+- **Intune Detection Integration**: Automatic registry key creation for Intune detection scripts
+- **Customizable Logging**: Configurable log paths for centralized logging
 - **Comprehensive Validation**: Multi-level package validation with template type detection
 - **Modern PowerShell**: PowerShell 5.1+ with proper error handling and logging
 - **Enterprise Ready**: Detailed logging and reporting
@@ -49,11 +51,11 @@ cd C:\PSADT_Automation
 ### 3. Create Package Using Official v4 Methods (Recommended)
 
 ```powershell
-# Create v4 native package (uses ADT-prefixed functions)
+# Create PSADT v4 native package
 .\New-PSADT4Package.ps1 -AppName "VLC Media Player" -AppVersion "3.0.20" -AppPublisher "VideoLAN" -SourcePath "C:\Source\VLC" -InstallFile "vlc-3.0.20-win64.exe" -InstallType "EXE"
 
-# Create v3 compatibility package (uses legacy function names)
-.\New-PSADT4Package.ps1 -AppName "Legacy App" -AppVersion "1.0" -AppPublisher "OldCorp" -SourcePath "C:\Source\Legacy" -InstallFile "setup.exe" -InstallType "EXE" -UseV3Compatibility
+# Create package with custom registry and logging settings for Intune
+.\New-PSADT4Package.ps1 -AppName "Chrome" -AppVersion "120.0" -AppPublisher "Google" -CompanyName "MyCompany" -SourcePath "C:\Source" -InstallFile "chrome.msi" -InstallType "MSI" -LogPath "D:\Logs"
 ```
 
 ### 4. Package Validation with Official v4 Testing
@@ -95,31 +97,57 @@ C:\PSADT_Automation\
 └── README.md                  # Main documentation
 ```
 
-## 🎯 Template Types
+## 🎯 PSADT v4 Native Functions
 
-### v4 Native Templates (Recommended)
-Uses modern ADT-prefixed functions introduced in PSADT v4:
-- `Start-ADTProcess` (instead of `Execute-Process`)
-- `Start-ADTMsiProcess` (instead of `Execute-MSI`)
-- `Show-ADTInstallationWelcome` (instead of `Show-InstallationWelcome`)
-- `Show-ADTInstallationPrompt` (instead of `Show-InstallationPrompt`)
+### Modern ADT-Prefixed Functions
+All generated packages use PSADT v4 native functions:
+- `Start-ADTProcess` - Execute processes with enhanced logging
+- `Start-ADTMsiProcess` - MSI installation with better error handling
+- `Show-ADTInstallationWelcome` - Modern welcome dialogs
+- `Show-ADTInstallationPrompt` - Enhanced user prompts
+- `Set-ADTRegistryKey` - Registry operations with validation
+- `Remove-ADTRegistryKey` - Safe registry cleanup
 
 **Benefits:**
 - Latest v4 features and improvements
 - Better performance and reliability
+- Enhanced error handling and logging
 - Future-proof compatibility
+- Official Microsoft-supported functions
 
-### v3 Compatibility Templates
-Uses familiar v3 function names for easier migration:
-- `Execute-Process`
-- `Execute-MSI`
-- `Show-InstallationWelcome`
-- `Show-InstallationPrompt`
+## 🎯 Intune Integration
 
-**Benefits:**
-- Easier migration from existing v3 scripts
-- Familiar function names
-- Gradual transition path to v4
+### Automatic Registry Keys for Detection
+All generated packages include automatic registry key creation for Intune detection:
+
+**Registry Location**: `HKEY_LOCAL_MACHINE\SOFTWARE\{CompanyName}\{AppName}`
+
+**Keys Created**:
+- `Version` - Application version
+- `InstallDate` - Installation date (yyyy-MM-dd format)
+
+### Example Intune Detection Script
+```powershell
+# Registry-based detection for Intune
+$CompanyName = "MyCompany"
+$AppName = "VLC Media Player"
+$ExpectedVersion = "3.0.20"
+
+$RegPath = "HKLM:\SOFTWARE\$CompanyName\$AppName"
+if (Test-Path $RegPath) {
+    $Version = Get-ItemProperty -Path $RegPath -Name "Version" -ErrorAction SilentlyContinue
+    if ($Version.Version -eq $ExpectedVersion) {
+        Write-Output "Application detected: $AppName v$ExpectedVersion"
+        exit 0
+    }
+}
+exit 1
+```
+
+### Customization
+- Use `-CompanyName` to customize registry path
+- Registry keys are automatically removed during uninstallation
+- Compatible with both v4 native and v3 compatibility modes
 
 ## 📝 Requirements
 
