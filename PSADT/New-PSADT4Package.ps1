@@ -176,11 +176,26 @@ function Test-PSADT4Installation {
 function Import-PSADT4Module {
     param([string]$Path)
     
-    $modulePath = Join-Path $Path "PSAppDeployToolkit.psm1"
-    
     try {
-        # Import the PSADT v4 module
-        Import-Module $modulePath -Force -Global -Verbose:$false
+        # First, try to use the installed PSAppDeployToolkit module
+        $installedModule = Get-Module -ListAvailable -Name PSAppDeployToolkit -ErrorAction SilentlyContinue
+        
+        if ($installedModule) {
+            Write-LogMessage "Using installed PSAppDeployToolkit module (Version: $($installedModule.Version))" -Type "Info"
+            Import-Module PSAppDeployToolkit -Force -Global -Verbose:$false
+        } else {
+            # Fall back to local path
+            Write-LogMessage "Installed module not found, using local path: $Path" -Type "Info"
+            $modulePath = Join-Path $Path "PSAppDeployToolkit.psm1"
+            
+            if (!(Test-Path $modulePath)) {
+                Write-LogMessage "Module not found at: $modulePath" -Type "Error"
+                return $false
+            }
+            
+            Import-Module $modulePath -Force -Global -Verbose:$false
+        }
+        
         Write-LogMessage "Successfully imported PSADT v4 module" -Type "Success"
         
         # Verify New-ADTTemplate cmdlet is available
@@ -372,7 +387,9 @@ Try {
     ##*===============================================
     ##* INSTALLATION
     ##*===============================================
-    [String]`$installPhase = 'Installation'    If (`$deploymentType -ine 'Uninstall' -and `$deploymentType -ine 'Repair') {
+    [String]`$installPhase = 'Installation'
+    
+    If (`$deploymentType -ine 'Uninstall' -and `$deploymentType -ine 'Repair') {
         ## <Perform Installation tasks here>
         [String]`$InstallFile = 'Files\$InstallFile'
         [String]`$InstallParameters = '$installParams'
@@ -467,11 +484,11 @@ try {
     
     # Create package directory with safe naming
     $packageName = New-SafePackageName -Publisher $AppPublisher -Name $AppName -Version $AppVersion
-    
-    # Use New-ADTTemplate to create the official v4 structure
+      # Use New-ADTTemplate to create the official v4 structure
     Write-LogMessage "Creating PSADT template using New-ADTTemplate..." -Type "Info"
-      try {
-        # Create v4 native template only
+    
+    try {
+        # Create v4 native template (Version 4 is default)
         New-ADTTemplate -Destination $OutputPath -Name $packageName
         Write-LogMessage "Created PSADT v4 native template: $packageName" -Type "Success"
     }
