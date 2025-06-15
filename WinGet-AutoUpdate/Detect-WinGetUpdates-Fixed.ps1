@@ -74,9 +74,9 @@ try {
       # Create apps list for remediation script
     $Apps | Out-File $AppsFile -Encoding UTF8 -Force
     Write-Log "Apps list created: $($Apps.Count) apps"
-    
-    # First, let's log all installed apps to help with diagnostics
-    Write-Log "Getting list of all installed apps"    try {
+      # First, let's log all installed apps to help with diagnostics
+    Write-Log "Getting list of all installed apps"
+    try {
         $allAppsOutput = & $WingetPath list --accept-source-agreements 2>&1
         # Save list to ProgramData for easier access
         $allAppsOutput | Out-File $AllAppsLogFile -Force
@@ -86,30 +86,31 @@ try {
         Write-Log "Error retrieving all apps: $_" "ERROR"
     }
 
-    # Now check if our monitored apps exist in the current context
-    Write-Log "Checking if monitored apps exist in current context"
+    # Now check if our monitored apps exist in the current context    Write-Log "Checking if monitored apps exist in current context"
     $existingApps = @()
     foreach ($app in $Apps) {
         $appCheck = & $WingetPath list --id $app --accept-source-agreements 2>&1
-        if ($appCheck -match $app) {
+        if ($appCheck -match [regex]::Escape($app)) {
             $existingApps += $app
             Write-Log "App found in current context: $app"
         }
         else {
             Write-Log "App NOT found in current context: $app" "WARNING"
-        }
-    }
-    Write-Log "Found $($existingApps.Count) of $($Apps.Count) monitored apps in current context"    # Check for updates using full path    Write-Log "Checking for updates"
+        }}
+    Write-Log "Found $($existingApps.Count) of $($Apps.Count) monitored apps in current context"
+
+    # Check for updates using full path
+    Write-Log "Checking for updates"
     $upgradeOutput = & $WingetPath upgrade --accept-source-agreements 2>&1
     # Save full upgrade output for diagnosis
     $upgradeOutput | Out-File $UpgradeLogFile -Force
     
     if ($LASTEXITCODE -ne 0) {
         Write-Log "WinGet upgrade check failed: $LASTEXITCODE" "ERROR"
-        Write-Output "Update check failed"
-        exit 0
+        Write-Output "Update check failed"        exit 0
     }
-      # Find apps needing updates
+
+    # Find apps needing updates
     $updatesNeeded = @()
     foreach ($app in $existingApps) {  # Only check apps that exist in this context
         if ($upgradeOutput | Select-String "^$([regex]::Escape($app))" -Quiet) {

@@ -97,16 +97,16 @@ try {
     # Load apps list
     if (!(Test-Path $AppsFile)) {
         Write-Log "Apps list not found" "ERROR"
-        Write-Output "No apps to update"
-        exit 0
-    }    $apps = Get-Content $AppsFile | Where-Object { $_.Trim() }
+        Write-Output "No apps to update"        exit 0
+    }
+
+    $apps = Get-Content $AppsFile | Where-Object { $_.Trim() }
     Write-Log "Processing $($apps.Count) apps from list"
-    
-    # First check which apps exist in this context
+      # First check which apps exist in this context
     $existingApps = @()
     foreach ($app in $apps) {
         $appCheck = & $WingetPath list --id $app --accept-source-agreements 2>&1
-        if ($appCheck -match $app) {
+        if ($appCheck -match [regex]::Escape($app)) {
             $existingApps += $app
             Write-Log "App found in current context: $app"
         }
@@ -122,10 +122,10 @@ try {
         Write-Output "No apps found to update in system context"
         exit 0
     }
-    
-    # Update WinGet sources
+      # Update WinGet sources
     & $WingetPath source update --accept-source-agreements | Out-Null
-      # Update each app
+
+    # Update each app
     $success = 0
     $failed = 0
     
@@ -134,9 +134,9 @@ try {
             $success++
         } else {
             $failed++
-        }
-    }
-      # Report results
+        }    }
+
+    # Report results
     $summary = "Complete: $success OK, $failed failed"
     Write-Log $summary
     Write-Output $summary
