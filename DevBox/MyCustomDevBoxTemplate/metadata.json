@@ -1,0 +1,12 @@
+{
+    "$schema": "https://aka.ms/azure-quickstart-templates-metadata-schema#",
+    "itemDisplayName": "Custom DevBox Deployment Template",
+    "summary": "Customizable template for deploying DevBox with configurable options",
+    "description": "This template provides a customizable way to set up the resources needed to deploy DevBoxes in your Azure subscription with options for compute, storage, and base image.",
+    "githubUsername": "yourgithubusername",
+    "type": "QuickStart",
+    "dateUpdated": "2025-06-26",
+    "environments": [
+      "AzureCloud"
+    ]
+  }

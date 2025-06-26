@@ -1,0 +1,26 @@
+# DevBox Customization Example
+# This file defines the customizations to apply to your DevBox instance
+
+# Clone repositories using PowerShell command
+- name: powershell
+  parameters:
+    command: |
+      # Navigate to the git-clone-repositories task directory
+      Set-Location "C:\DevBoxCustomizations\git-clone-repositories"
+      
+      # Run the repository cloning script with hardcoded repositories
+      .\Clone-RepositoriesAfterDeployment.ps1 -UseHardcodedRepos $true
+
+# Install common tools with WinGet
+- name: winget
+  parameters:
+    packageId: Microsoft.VisualStudioCode
+
+- name: winget
+  parameters:
+    packageId: Git.Git
+
+# Add additional customizations as needed
+# - name: powershell
+#   parameters:
+#     command: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force

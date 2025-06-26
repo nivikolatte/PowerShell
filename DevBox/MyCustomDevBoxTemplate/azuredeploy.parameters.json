@@ -1,0 +1,30 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "devCenterName": {
+            "value": "my-custom-devcenter"
+        },
+        "projectName": {
+            "value": "my-custom-project"
+        },
+        "poolName": {
+            "value": "my-custom-devboxpool"
+        },
+        "computeSku": {
+            "value": "general_i_16c64gb512ssd_v2"
+        },
+        "storageSize": {
+            "value": "512gb"
+        },
+        "baseImage": {
+            "value": "microsoftvisualstudio_visualstudioplustools_vs-2022-ent-general-win11-m365-gen2"
+        },
+        "localAdministrator": {
+            "value": "Enabled"
+        },
+        "hibernateSupport": {
+            "value": "Enabled"
+        }
+    }
+}
