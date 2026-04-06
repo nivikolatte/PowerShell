@@ -5,6 +5,8 @@
 .DESCRIPTION
     The script creates a directory for BitLocker logs, prompts the user to set a BitLocker startup PIN through a GUI form, and configures BitLocker with the specified PIN. It ensures the PIN meets complexity requirements and logs the process. The script also handles the backup of the BitLocker recovery key to Azure AD.
 
+    The PIN supports letters, numbers, and special characters (Enhanced PIN). To use alphanumeric PINs, ensure the "Allow enhanced PINs for startup" Group Policy is enabled on the device.
+
     A company logo is displayed on the PIN input form. The logo file should be named "Company_logo.png" and placed in the same directory as the script. If the logo file is not found, a warning will be displayed, but the script will continue to execute.
 
 .PARAMETER None
@@ -48,17 +50,23 @@ function Is-PinComplex {
     # Check for reverse sequential numbers
     if ($pin -match '98765|87654|76543|65432|54321|43210') { return $false }
     
-    # Check for repeated digits (6 or more repetitions)
-    if ($pin -match '(\d)\1{5,}') { return $false }
+    # Check for sequential letters (ascending)
+    if ($pin -imatch 'abcde|bcdef|cdefg|defgh|efghi|fghij|ghijk|hijkl|ijklm|jklmn|klmno|lmnop|mnopq|nopqr|opqrs|pqrst|qrstu|rstuv|stuvw|tuvwx|uvwxy|vwxyz') { return $false }
     
-    # Check for common patterns (repeating sequences)
-    if ($pin -match '(\d{3,})\1') { return $false }
+    # Check for sequential letters (descending)
+    if ($pin -imatch 'zyxwv|yxwvu|xwvut|wvuts|vutsr|utsrq|tsrqp|srqpo|rqpon|qponm|ponml|onmlk|nmlkj|mlkji|lkjih|kjihg|jihgf|ihgfe|hgfed|gfedc|fedcb|edcba') { return $false }
     
-    # Check if all digits are the same
-    if ($pin -match '^(\d)\1*$') { return $false }
+    # Check for repeated characters (6 or more repetitions)
+    if ($pin -match '(.)\1{5,}') { return $false }
+    
+    # Check for common patterns (repeating sequences of 3+ characters)
+    if ($pin -match '(.{3,})\1') { return $false }
+    
+    # Check if all characters are the same
+    if ($pin -match '^(.)\1*$') { return $false }
     
     # Check for repeating pairs
-    if ($pin -match '(\d{2})\1+') { return $false }
+    if ($pin -match '(.{2})\1+') { return $false }
     
     return $true
 }
@@ -94,7 +102,7 @@ function Show-PinInputForm {
 
     # Instructions
     $instructionLabel = New-Object System.Windows.Forms.Label
-    $instructionLabel.Text = "PIN must be at least 6 digits long, contain only numbers, and not use simple patterns."
+    $instructionLabel.Text = "PIN must be at least 6 characters long and not use simple patterns. Letters, numbers, and special characters are allowed."
     $instructionLabel.Font = New-Object System.Drawing.Font("Segoe UI", 13)
     $instructionLabel.AutoSize = $true
     $instructionLabel.Location = New-Object System.Drawing.Point(20, 140)
@@ -130,22 +138,23 @@ function Show-PinInputForm {
     $form.Controls.AddRange(@($logoBox, $label, $instructionLabel, $pinInput, $pinConfirmInput, $submitButton, $errorLabel))
 
     $script:pin = $null
+    $allowedCharsPattern = '^[a-zA-Z0-9!@#$%^&*()\-_+=\[\]{};:''",.<>?/\\|`~]+$'
 
     $submitButton.Add_Click({
         $enteredPin = $pinInput.Text
         $confirmedPin = $pinConfirmInput.Text
-        if ($enteredPin.Length -ge 6 -and $enteredPin -match '^\d+$' -and $enteredPin -eq $confirmedPin) {
+        if ($enteredPin.Length -ge 6 -and $enteredPin -match $allowedCharsPattern -and $enteredPin -eq $confirmedPin) {
             if (Is-PinComplex $enteredPin) {
                 $script:pin = $enteredPin
                 Log-Message "PIN set successfully"
                 $form.Close()
             } else {
-                $errorLabel.Text = "PIN is too simple. Please avoid sequential numbers, repeating patterns, or easily guessable combinations."
+                $errorLabel.Text = "PIN is too simple. Please avoid sequential characters, repeating patterns, or easily guessable combinations."
             }
         } elseif ($enteredPin -ne $confirmedPin) {
             $errorLabel.Text = "PINs do not match. Please try again."
         } else {
-            $errorLabel.Text = "PIN must be at least 6 digits long and contain only numbers."
+            $errorLabel.Text = "PIN must be at least 6 characters long. Letters, numbers, and special characters are allowed."
         }
     })
 
