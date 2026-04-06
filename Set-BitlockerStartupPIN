@@ -138,7 +138,7 @@ function Show-PinInputForm {
     $form.Controls.AddRange(@($logoBox, $label, $instructionLabel, $pinInput, $pinConfirmInput, $submitButton, $errorLabel))
 
     $script:pin = $null
-    $allowedCharsPattern = '^[a-zA-Z0-9!@#$%^&*()\-_+=\[\]{};:''",.<>?/\\|`~]+$'
+    $allowedCharsPattern = '^[a-zA-Z0-9!@#$%^&*()_\-+=\[\]{};:''",.<>?/\\|`~]+$'
 
     $submitButton.Add_Click({
         $enteredPin = $pinInput.Text
